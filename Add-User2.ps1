@@ -47,19 +47,19 @@ class User {
     }
 }
 
-# Функция для получения списка OU
-function Get-OUList {
-    $ouList = Get-ADOrganizationalUnit -Filter * | Select-Object -Property DistinguishedName
-
-    # Фильтрация списка OU, чтобы включить только те, в пути которых есть "OU=Users"
-    $filteredOUList = $ouList | Where-Object { $_.DistinguishedName -match "OU=Users" }
-    return $filteredOUList
+# Чтение пути OU из файла
+$ouFilePath = [System.IO.Path]::Combine($env:TEMP, "ou100med.txt")
+if (-Not (Test-Path $ouFilePath)) {
+    [System.Windows.Forms.MessageBox]::Show("Файл с путем OU не найден: $ouFilePath")
+    exit
 }
+
+$ouPath = Get-Content -Path $ouFilePath -ErrorAction Stop
 
 # Создание формы
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Создание пользователя AD"
-$form.Size = New-Object System.Drawing.Size(400, 400)
+$form.Size = New-Object System.Drawing.Size(400, 300)
 $form.StartPosition = "CenterScreen"
 
 # Создание меток и текстовых полей для ввода данных пользователя
@@ -83,30 +83,12 @@ foreach ($labelText in $labels) {
     $yPos += 30
 }
 
-# Создание ComboBox для выбора OU
-$ouLabel = New-Object System.Windows.Forms.Label
-$ouLabel.Text = "Выберите OU"
-$ouLabel.Location = New-Object System.Drawing.Point(10, $yPos)
-$ouLabel.Size = New-Object System.Drawing.Size(150, 20)
-$form.Controls.Add($ouLabel)
-
-$ouComboBox = New-Object System.Windows.Forms.ComboBox
-$ouComboBox.Location = New-Object System.Drawing.Point(170, $yPos)
-$ouComboBox.Size = New-Object System.Drawing.Size(200, 20)
-$form.Controls.Add($ouComboBox)
-
-# Заполнение ComboBox списком OU
-$ouList = Get-OUList
-foreach ($ou in $ouList) {
-    $null = $ouComboBox.Items.Add($ou.DistinguishedName)
-}
-
-$yPos += 40
+$yPos += 10
 
 # Создание кнопки для создания пользователя
 $createButton = New-Object System.Windows.Forms.Button
 $createButton.Text = "Создать пользователя"
-$createButton.Location = New-Object System.Drawing.Point(150, $yPos)
+$createButton.Location = New-Object System.Drawing.Point(125, $yPos)
 $createButton.Size = New-Object System.Drawing.Size(150, 30)
 $form.Controls.Add($createButton)
 
@@ -116,29 +98,28 @@ $createButton.Add_Click({
     $givenName = $textBoxes[1].Text
     $middleName = $textBoxes[2].Text
     $samAccountName = $textBoxes[3].Text
-    $selectedOU = $ouComboBox.SelectedItem
 
     # Отладочные сообщения
     Write-Host "Фамилия: $surname"
     Write-Host "Имя: $givenName"
     Write-Host "Отчество: $middleName"
     Write-Host "Имя входа пользователя: $samAccountName"
-    Write-Host "Выбранный OU: $selectedOU"
+    Write-Host "OU Path: $ouPath"
 
-    if ($surname -and $givenName -and $samAccountName -and $selectedOU) {
+    if ($surname -and $givenName -and $samAccountName) {
         $user = [User]::new($givenName, $middleName, $surname, $samAccountName)
         if ($user.UserExists()) {
             [System.Windows.Forms.MessageBox]::Show("Учетная запись с именем $samAccountName уже существует.")
         } else {
             try {
-                $user.CreateUser($selectedOU)
-                [System.Windows.Forms.MessageBox]::Show("Пользователь $($user.DisplayName) успешно создан в OU $selectedOU")
+                $user.CreateUser($ouPath)
+                [System.Windows.Forms.MessageBox]::Show("Пользователь $($user.DisplayName) успешно создан в OU $ouPath")
             } catch {
                 [System.Windows.Forms.MessageBox]::Show("Ошибка при создании пользователя: $_")
             }
         }
     } else {
-        [System.Windows.Forms.MessageBox]::Show("Пожалуйста, заполните все обязательные поля и выберите OU.")
+        [System.Windows.Forms.MessageBox]::Show("Пожалуйста, заполните все обязательные поля.")
     }
 })
 
